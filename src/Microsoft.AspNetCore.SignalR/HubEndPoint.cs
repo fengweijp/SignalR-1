@@ -232,7 +232,7 @@ namespace Microsoft.AspNetCore.SignalR
         private static bool IsHubMethod(MethodInfo m)
         {
             // TODO: Add more checks
-            return m.IsPublic;
+            return m.IsPublic && typeof(Hub<IClientProxy>) != m.GetBaseDefinition().DeclaringType;
         }
 
         Type IInvocationBinder.GetReturnType(string invocationId)
