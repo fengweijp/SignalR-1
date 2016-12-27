@@ -19,9 +19,10 @@ namespace Microsoft.AspNetCore.SignalR
                            IHubContext<THub> hubContext,
                            InvocationAdapterRegistry registry,
                            ILogger<HubEndPoint<THub>> logger,
-                           IServiceScopeFactory serviceScopeFactory) : base(lifetimeManager, hubContext, registry, logger, serviceScopeFactory)
+                           IServiceScopeFactory serviceScopeFactory,
+                           IHubActivator hubActivator)
+            : base(lifetimeManager, hubContext, registry, logger, serviceScopeFactory, hubActivator)
         {
-
         }
     }
 
@@ -36,18 +37,21 @@ namespace Microsoft.AspNetCore.SignalR
         private readonly ILogger<HubEndPoint<THub, TClient>> _logger;
         private readonly InvocationAdapterRegistry _registry;
         private readonly IServiceScopeFactory _serviceScopeFactory;
+        private readonly IHubActivator _hubActivator;
 
         public HubEndPoint(HubLifetimeManager<THub> lifetimeManager,
                            IHubContext<THub, TClient> hubContext,
                            InvocationAdapterRegistry registry,
                            ILogger<HubEndPoint<THub, TClient>> logger,
-                           IServiceScopeFactory serviceScopeFactory)
+                           IServiceScopeFactory serviceScopeFactory,
+                           IHubActivator hubActivator)
         {
             _lifetimeManager = lifetimeManager;
             _hubContext = hubContext;
             _registry = registry;
             _logger = logger;
             _serviceScopeFactory = serviceScopeFactory;
+            _hubActivator = hubActivator;
 
             DiscoverHubMethods();
         }
@@ -62,16 +66,11 @@ namespace Microsoft.AspNetCore.SignalR
                 await _lifetimeManager.OnConnectedAsync(connection);
 
                 using (var scope = _serviceScopeFactory.CreateScope())
+                using (var hubWrapper = _hubActivator.Create<THub, TClient>(scope.ServiceProvider))
                 {
-                    bool created;
-                    var hub = CreateHub(scope.ServiceProvider, connection, out created);
-
+                    var hub = (THub)hubWrapper;
+                    InitializeHub(hub, connection);
                     await hub.OnConnectedAsync();
-
-                    if (created)
-                    {
-                        hub.Dispose();
-                    }
                 }
 
                 await DispatchMessagesAsync(connection);
@@ -86,16 +85,11 @@ namespace Microsoft.AspNetCore.SignalR
             finally
             {
                 using (var scope = _serviceScopeFactory.CreateScope())
+                using (var hubWrapper = _hubActivator.Create<THub, TClient>(scope.ServiceProvider))
                 {
-                    bool created;
-                    var hub = CreateHub(scope.ServiceProvider, connection, out created);
-
+                    var hub = (THub)hubWrapper;
+                    InitializeHub(hub, connection);
                     await hub.OnDisconnectedAsync(exception);
-
-                    if (created)
-                    {
-                        hub.Dispose();
-                    }
                 }
 
                 await _lifetimeManager.OnDisconnectedAsync(connection);
@@ -145,22 +139,11 @@ namespace Microsoft.AspNetCore.SignalR
             }
         }
 
-        private THub CreateHub(IServiceProvider provider, Connection connection, out bool created)
+        private void InitializeHub(THub hub, Connection connection)
         {
-            var hub = provider.GetService<THub>();
-            created = false;
-
-            if (hub == null)
-            {
-                hub = ActivatorUtilities.CreateInstance<THub>(provider);
-                created = true;
-            }
-
             hub.Clients = _hubContext.Clients;
             hub.Context = new HubCallerContext(connection);
             hub.Groups = new GroupManager<THub>(connection, _lifetimeManager);
-
-            return hub;
         }
 
         private void DiscoverHubMethods()
@@ -192,9 +175,10 @@ namespace Microsoft.AspNetCore.SignalR
                     };
 
                     using (var scope = _serviceScopeFactory.CreateScope())
+                    using (var hubWrapper = _hubActivator.Create<THub, TClient>(scope.ServiceProvider))
                     {
-                        bool created;
-                        var hub = CreateHub(scope.ServiceProvider, connection, out created);
+                        var hub = (THub)hubWrapper;
+                        InitializeHub(hub, connection);
 
                         try
                         {
@@ -223,11 +207,6 @@ namespace Microsoft.AspNetCore.SignalR
                         {
                             _logger.LogError(0, ex, "Failed to invoke hub method");
                             invocationResult.Error = ex.Message;
-                        }
-
-                        if (created)
-                        {
-                            hub.Dispose();
                         }
                     }
 
