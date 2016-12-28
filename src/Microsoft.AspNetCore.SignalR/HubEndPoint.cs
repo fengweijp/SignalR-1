@@ -66,9 +66,8 @@ namespace Microsoft.AspNetCore.SignalR
                 await _lifetimeManager.OnConnectedAsync(connection);
 
                 using (var scope = _serviceScopeFactory.CreateScope())
-                using (var hubWrapper = _hubActivator.Create<THub, TClient>(scope.ServiceProvider))
+                using (var hub = _hubActivator.Create<THub, TClient>(scope.ServiceProvider))
                 {
-                    var hub = (THub)hubWrapper;
                     InitializeHub(hub, connection);
                     await hub.OnConnectedAsync();
                 }
@@ -85,9 +84,8 @@ namespace Microsoft.AspNetCore.SignalR
             finally
             {
                 using (var scope = _serviceScopeFactory.CreateScope())
-                using (var hubWrapper = _hubActivator.Create<THub, TClient>(scope.ServiceProvider))
+                using (var hub = _hubActivator.Create<THub, TClient>(scope.ServiceProvider))
                 {
-                    var hub = (THub)hubWrapper;
                     InitializeHub(hub, connection);
                     await hub.OnDisconnectedAsync(exception);
                 }
@@ -139,7 +137,7 @@ namespace Microsoft.AspNetCore.SignalR
             }
         }
 
-        private void InitializeHub(THub hub, Connection connection)
+        private void InitializeHub(IHub<TClient> hub, Connection connection)
         {
             hub.Clients = _hubContext.Clients;
             hub.Context = new HubCallerContext(connection);
@@ -175,14 +173,13 @@ namespace Microsoft.AspNetCore.SignalR
                     };
 
                     using (var scope = _serviceScopeFactory.CreateScope())
-                    using (var hubWrapper = _hubActivator.Create<THub, TClient>(scope.ServiceProvider))
+                    using (var hub = _hubActivator.Create<THub, TClient>(scope.ServiceProvider))
                     {
-                        var hub = (THub)hubWrapper;
                         InitializeHub(hub, connection);
 
                         try
                         {
-                            var result = methodInfo.Invoke(hub, invocationDescriptor.Arguments);
+                            var result = hub.Invoke(methodInfo, invocationDescriptor.Arguments);
                             var resultTask = result as Task;
                             if (resultTask != null)
                             {

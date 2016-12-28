@@ -1,6 +1,7 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using Moq;
 using Moq.Protected;
 using Xunit;
@@ -9,6 +10,14 @@ namespace Microsoft.AspNetCore.SignalR.Tests
 {
     public class HubWrapperTests
     {
+        [Fact]
+        public void CannotCreateWrapperOverNullHub()
+        {
+            Assert.Equal(
+                Assert.Throws<ArgumentNullException>(
+                    () => new HubWrapper<Hub<object>, object>(null, false)).ParamName, "hub");
+        }
+
         [Fact]
         public void HubWrapperDisposesHubsCreatedByActivator()
         {

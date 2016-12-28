@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Internal;
 
@@ -9,10 +10,9 @@ namespace Microsoft.AspNetCore.SignalR
 {
     public class Hub : Hub<IClientProxy>
     {
-
     }
 
-    public class Hub<TClient> : IDisposable
+    public class Hub<TClient> : IHub<TClient>
     {
         private bool _disposed;
         private IHubConnectionContext<TClient> _clients;
@@ -69,6 +69,11 @@ namespace Microsoft.AspNetCore.SignalR
         public virtual Task OnDisconnectedAsync(Exception exception)
         {
             return TaskCache.CompletedTask;
+        }
+
+        public object Invoke(MethodInfo methodInfo, object[] arguments)
+        {
+            return methodInfo.Invoke(this, arguments);
         }
 
         protected virtual void Dispose(bool disposing)
